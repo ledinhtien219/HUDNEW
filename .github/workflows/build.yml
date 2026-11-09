@@ -1,0 +1,51 @@
+name: Build T-OS firmware
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'TOS_Premium/**'
+      - '.github/workflows/build.yml'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Install ESP32 core and libraries
+        run: |
+          arduino-cli config init
+          arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32@2.0.17
+          arduino-cli lib install "GFX Library for Arduino"
+          arduino-cli lib install "XPT2046_Touchscreen"
+      - name: Compile ESP32 4MB DIO
+        run: |
+          mkdir -p build
+          arduino-cli compile --fqbn esp32:esp32:esp32:FlashSize=4M,FlashMode=dio,FlashFreq=40,PartitionScheme=default --output-dir build TOS_Premium
+          ls -lah build
+      - name: Create merged BIN for Android OTG
+        run: |
+          python3 -m pip install 'esptool==4.8.1'
+          BOOT=$(find build -maxdepth 1 -name '*.bootloader.bin' -print -quit)
+          PART=$(find build -maxdepth 1 -name '*.partitions.bin' -print -quit)
+          APP=$(find build -maxdepth 1 -name '*.ino.bin' -print -quit)
+          BOOTAPP=$(find "$HOME/.arduino15/packages/esp32/hardware/esp32/2.0.17/tools/partitions" -name 'boot_app0.bin' -print -quit)
+          test -s "$BOOT" && test -s "$PART" && test -s "$APP" && test -s "$BOOTAPP"
+          python3 -m esptool --chip esp32 merge_bin -o build/TOS_Premium_ESP32_4MB_merged.bin --flash_mode dio --flash_freq 40m --flash_size 4MB 0x1000 "$BOOT" 0x8000 "$PART" 0xe000 "$BOOTAPP" 0x10000 "$APP"
+          test -s build/TOS_Premium_ESP32_4MB_merged.bin
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('build/TOS_Premium_ESP32_4MB_merged.bin')
+          assert p.read_bytes()[0] == 0xE9, 'Invalid ESP32 bootloader header'
+          print('Merged image bytes:',p.stat().st_size)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TOS-Premium-ESP32-4MB
+          path: |
+            build/TOS_Premium_ESP32_4MB_merged.bin
+            build/*.ino.bin
+          if-no-files-found: error
