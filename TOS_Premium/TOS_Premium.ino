@@ -16,6 +16,7 @@ constexpr uint16_t BG=0x0842,PANEL=0x18C6,WHITE=0xFFFF,MUTED=0xA514,CYAN=0x07FF,
 enum Page {HOME,CLOCK,WEATHER,HUD,ASSISTANT,CONNECTION,SETTINGS};
 Page page=HOME;
 unsigned long lastDraw=0,lastWeather=0,lastTouch=0;
+String lastClockText="",lastHomeTime="";
 float tempC=NAN,windKmh=NAN;
 bool weatherOk=false;
 int hudSpeed=0,hudLimit=0,hudDistance=0;
@@ -38,23 +39,33 @@ void tile(int x,int y,const char *name,int kind,uint16_t color){
  gfx->fillRoundRect(x,y,94,78,13,PANEL);gfx->fillRoundRect(x+29,y+7,36,36,10,color);icon(x+47,y+25,kind);
  txt(x+(94-(int)strlen(name)*6)/2,y+54,name,WHITE,1);
 }
+void updateHomeTime(){
+ struct tm t;char b[12];String v="--:--";
+ if(getLocalTime(&t,5)){strftime(b,sizeof(b),"%H:%M",&t);v=b;}
+ if(v==lastHomeTime)return;
+ gfx->fillRect(236,7,80,22,BG);txt(239,9,v,WHITE,2);lastHomeTime=v;
+}
 void home(){
  gfx->fillScreen(BG);txt(12,9,"T-OS",CYAN);txt(75,13,"PREMIUM",MUTED,1);
- struct tm t;char b[12];
- if(getLocalTime(&t,5)){strftime(b,sizeof(b),"%H:%M",&t);txt(239,9,b);}
- else txt(248,9,"--:--",WHITE,1);
+ lastHomeTime="";updateHomeTime();
  tile(6,35,"CLOCK",0,0x247F);tile(113,35,"WEATHER",1,0x05B9);tile(220,35,"HUD",2,ORANGE);
  tile(6,123,"AI",3,PURPLE);tile(113,123,"CONNECT",4,0x04F0);tile(220,123,"SETTINGS",5,0x8410);
  txt(11,214,WiFi.status()==WL_CONNECTED?"WIFI CONNECTED":"WIFI OFFLINE",WiFi.status()==WL_CONNECTED?GREEN:RED,1);
  txt(264,214,"v0.3",MUTED,1);
 }
+void updateClockTime(){
+ struct tm t;char b[40];String v="--:--:--";
+ if(getLocalTime(&t,5)){strftime(b,sizeof(b),"%H:%M:%S",&t);v=b;}
+ if(v==lastClockText)return;
+ gfx->fillRect(0,68,320,55,BG);center(74,v,CYAN,4);lastClockText=v;
+}
 void clockPage(){
  header("CLOCK");struct tm t;char b[40];
  if(getLocalTime(&t,5)){
- strftime(b,sizeof(b),"%H:%M:%S",&t);center(74,b,CYAN,4);
+ lastClockText="";updateClockTime();
  strftime(b,sizeof(b),"%d/%m/%Y",&t);center(142,b);
  center(180,"VIETNAM UTC+7",MUTED,1);
- }else{center(90,"WAITING FOR NTP",YELLOW);center(130,"CHECK WIFI",MUTED);}
+ }else{lastClockText="";updateClockTime();center(145,"CHECK WIFI / NTP",MUTED,1);}
 }
 void fetchWeather(){
  lastWeather=millis();weatherOk=false;if(WiFi.status()!=WL_CONNECTED)return;
@@ -136,6 +147,6 @@ void loop(){
  while(Serial.available()){char c=(char)Serial.read();if(c=='\n'){processHud(serialLine);serialLine="";}else if(c!='\r'&&serialLine.length()<140)serialLine+=c;}
  unsigned long now=millis();
  if((lastWeather==0&&WiFi.status()==WL_CONNECTED)||now-lastWeather>900000UL){fetchWeather();if(page==WEATHER)render();}
- if(now-lastDraw>1000){lastDraw=now;if(page==CLOCK||page==HOME)render();}
+ if(now-lastDraw>1000){lastDraw=now;if(page==CLOCK)updateClockTime();else if(page==HOME)updateHomeTime();}
  delay(10);
 }
