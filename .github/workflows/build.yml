@@ -39,7 +39,9 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           p=Path('build/TOS_Premium_ESP32_4MB_merged.bin')
-          assert 0 < p.stat().st_size <= 4*1024*1024, 'Image exceeds 4MB flash'\n          assert p.read_bytes()[0x1000] == 0xE9, 'Invalid ESP32 bootloader header at 0x1000'\n          assert p.read_bytes()[0x10000] == 0xE9, 'Invalid application image header at 0x10000'
+          assert 0 < p.stat().st_size <= 4*1024*1024, 'Image exceeds 4MB flash'
+          assert p.read_bytes()[0x1000] == 0xE9, 'Invalid ESP32 bootloader header at 0x1000'
+          assert p.read_bytes()[0x10000] == 0xE9, 'Invalid application image header at 0x10000'
           print('Merged image bytes:',p.stat().st_size)
           PY
       - uses: actions/upload-artifact@v4
