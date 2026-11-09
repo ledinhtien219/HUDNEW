@@ -1,6 +1,8 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <WebServer.h>
+#include <Preferences.h>
 #include <time.h>
 #include <SPI.h>
 #include <Arduino_GFX_Library.h>
@@ -21,6 +23,11 @@ float tempC=NAN,windKmh=NAN;
 bool weatherOk=false;
 int hudSpeed=0,hudLimit=0,hudDistance=0;
 String hudTurn="--",hudAlert="NO ALERT",serialLine;
+WebServer webServer(80);
+Preferences prefs;
+String wifiName,wifiPassword;
+bool setupPortal=false;
+const char* AP_NAME="TOS-SETUP";
 
 void txt(int x,int y,const String &s,uint16_t c=WHITE,int size=2){gfx->setTextColor(c);gfx->setTextSize(size);gfx->setCursor(x,y);gfx->print(s);}
 void center(int y,const String &s,uint16_t c=WHITE,int size=2){txt(max(0,(W-(int)s.length()*6*size)/2),y,s,c,size);}
@@ -85,7 +92,7 @@ void home(){
  tile(218,124,"SETTINGS",5,0x8410);
  gfx->drawFastHLine(8,210,304,0x2945);
  txt(12,219,WiFi.status()==WL_CONNECTED?"WIFI ONLINE":"WIFI OFFLINE",WiFi.status()==WL_CONNECTED?GREEN:ORANGE,1);
- txt(263,219,"v0.4",MUTED,1);
+ txt(263,219,"v0.5",MUTED,1);
 }
 void updateClockTime(){
  struct tm t;char b[40];String v="--:--:--";
@@ -146,10 +153,11 @@ void connectionPage(){
  header("CONNECTION");txt(13,59,"WIFI STATUS",CYAN);
  txt(13,94,WiFi.status()==WL_CONNECTED?"CONNECTED":"DISCONNECTED",WiFi.status()==WL_CONNECTED?GREEN:RED);
  if(WiFi.status()==WL_CONNECTED)txt(13,130,WiFi.localIP().toString());
- txt(13,181,"HUD: USB SERIAL DEMO",YELLOW,1);
+ txt(13,170,setupPortal?"SETUP AP: TOS-SETUP":"HUD: SERIAL DEMO",YELLOW,1);
+ if(setupPortal)txt(13,192,"OPEN 192.168.4.1",WHITE,1);
 }
 void settingsPage(){
- header("SETTINGS");txt(14,57,"T-OS CAR EDITION v0.4",CYAN);txt(14,101,"BOARD: ESP32-2432S028R",WHITE,1);
+ header("SETTINGS");txt(14,57,"T-OS CAR EDITION v0.5",CYAN);txt(14,101,"BOARD: ESP32-2432S028R",WHITE,1);
  txt(14,130,"DISPLAY: 320 x 240",WHITE,1);txt(14,159,"TOUCH: XPT2046",WHITE,1);txt(14,191,"RESET: HARDWARE BUTTON",MUTED,1);
 }
 void render(){
@@ -183,14 +191,46 @@ void touchRead(){
  else if(y>=123&&y<201){page=x<107?ASSISTANT:x<214?CONNECTION:SETTINGS;}
  render();
 }
+void beginNetwork(){
+ prefs.begin("tos",false);
+ wifiName=prefs.getString("ssid",TOS_WIFI_SSID);
+ wifiPassword=prefs.getString("pass",TOS_WIFI_PASSWORD);
+ WiFi.mode(WIFI_STA);
+ if(wifiName.length()){
+  WiFi.begin(wifiName.c_str(),wifiPassword.c_str());
+  unsigned long start=millis();
+  while(WiFi.status()!=WL_CONNECTED && millis()-start<8000)delay(50);
+ }
+ if(WiFi.status()!=WL_CONNECTED){
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.softAP(AP_NAME);
+  setupPortal=true;
+ }
+ webServer.on("/",HTTP_GET,[](){
+  String page="<html><meta name='viewport' content='width=device-width,initial-scale=1'><style>body{background:#08141e;color:white;font:18px sans-serif;padding:20px}input,button{padding:14px;margin:8px 0;width:95%;font-size:18px}</style><h2>T-OS Wi-Fi Setup</h2><form action='/save' method='POST'><input name='ssid' placeholder='Wi-Fi name' required maxlength='32'><input name='pass' placeholder='Wi-Fi password' type='password' maxlength='64'><button>Save and restart</button></form><p>Connect phone to TOS-SETUP, then open 192.168.4.1</p>";
+  webServer.send(200,"text/html",page);
+ });
+ webServer.on("/save",HTTP_POST,[](){
+  String ssid=webServer.arg("ssid"),pass=webServer.arg("pass");
+  if(ssid.length()<1||ssid.length()>32||pass.length()>64){webServer.send(400,"text/plain","Invalid Wi-Fi credentials");return;}
+  prefs.putString("ssid",ssid);prefs.putString("pass",pass);
+  webServer.send(200,"text/plain","Saved. Restart ESP32 to connect.");
+ });
+ webServer.on("/hud",HTTP_POST,[](){
+  if(webServer.arg("plain").length()>140){webServer.send(413,"text/plain","Too long");return;}
+  processHud(webServer.arg("plain"));webServer.send(200,"text/plain","OK");
+ });
+ webServer.begin();
+}
 void setup(){
  Serial.begin(115200);pinMode(LCD_BL,OUTPUT);digitalWrite(LCD_BL,HIGH);
  gfx->begin(40000000);gfx->setRotation(1);gfx->fillScreen(BG);txt(32,88,"T-OS PREMIUM",CYAN,3);
  touchSPI.begin(TP_SCK,TP_MISO,TP_MOSI,TP_CS);touch.begin(touchSPI);touch.setRotation(1);
- WiFi.mode(WIFI_STA);if(strlen(TOS_WIFI_SSID))WiFi.begin(TOS_WIFI_SSID,TOS_WIFI_PASSWORD);
+ beginNetwork();
  configTzTime("ICT-7","pool.ntp.org","time.google.com");render();
 }
 void loop(){
+ webServer.handleClient();
  touchRead();
  while(Serial.available()){char c=(char)Serial.read();if(c=='\n'){processHud(serialLine);serialLine="";}else if(c!='\r'&&serialLine.length()<140)serialLine+=c;}
  unsigned long now=millis();
