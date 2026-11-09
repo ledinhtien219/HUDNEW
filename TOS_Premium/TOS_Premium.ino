@@ -12,7 +12,7 @@ Arduino_GFX *gfx = new Arduino_ILI9341(bus,GFX_NOT_DEFINED,1,false);
 SPIClass touchSPI(HSPI);
 XPT2046_Touchscreen touch(TP_CS,TP_IRQ);
 constexpr int W=320,H=240;
-constexpr uint16_t BG=0x0842,PANEL=0x18C6,WHITE=0xFFFF,MUTED=0xA514,CYAN=0x07FF,GREEN=0x07E0,YELLOW=0xFFE0,ORANGE=0xFD20,PURPLE=0xA19F,RED=0xF800;
+constexpr uint16_t BG=0x0022,PANEL=0x10A4,WHITE=0xFFFF,MUTED=0x8C71,CYAN=0x05FF,GREEN=0x05E8,YELLOW=0xFE60,ORANGE=0xFBE0,PURPLE=0x91BF,RED=0xF9C5;
 enum Page {HOME,CLOCK,WEATHER,HUD,ASSISTANT,CONNECTION,SETTINGS};
 Page page=HOME;
 unsigned long lastDraw=0,lastWeather=0,lastTouch=0;
@@ -24,34 +24,68 @@ String hudTurn="--",hudAlert="NO ALERT",serialLine;
 
 void txt(int x,int y,const String &s,uint16_t c=WHITE,int size=2){gfx->setTextColor(c);gfx->setTextSize(size);gfx->setCursor(x,y);gfx->print(s);}
 void center(int y,const String &s,uint16_t c=WHITE,int size=2){txt(max(0,(W-(int)s.length()*6*size)/2),y,s,c,size);}
-void header(const char *s){gfx->fillScreen(BG);gfx->fillRoundRect(5,5,310,32,8,PANEL);txt(13,14,s,CYAN);gfx->fillRoundRect(267,8,45,25,7,0x2945);txt(279,13,"<");}
+void header(const char *s){
+ gfx->fillScreen(BG);
+ gfx->fillRect(0,0,320,3,ORANGE);
+ txt(13,13,"T-OS",ORANGE,2);
+ txt(82,17,s,WHITE,1);
+ gfx->fillRoundRect(265,9,46,26,8,PANEL);
+ txt(280,14,"<",WHITE,2);
+ gfx->drawFastHLine(10,42,300,0x2945);
+}
 void icon(int x,int y,int k){
  switch(k){
- case 0:gfx->drawCircle(x,y,13,WHITE);gfx->drawLine(x,y,x,y-8,WHITE);gfx->drawLine(x,y,x+7,y+3,WHITE);break;
- case 1:gfx->fillCircle(x-6,y+3,8,WHITE);gfx->fillCircle(x+5,y,10,WHITE);gfx->fillRoundRect(x-16,y,32,12,5,WHITE);break;
- case 2:gfx->fillTriangle(x-12,y-10,x+12,y,x-12,y+10,WHITE);break;
- case 3:gfx->drawRoundRect(x-13,y-10,26,20,7,WHITE);gfx->fillCircle(x-5,y-2,2,WHITE);gfx->fillCircle(x+5,y-2,2,WHITE);gfx->drawLine(x-5,y+5,x+5,y+5,WHITE);break;
- case 4:gfx->drawCircle(x,y,12,WHITE);gfx->drawCircle(x,y,5,WHITE);break;
- default:gfx->drawCircle(x,y,12,WHITE);gfx->drawLine(x-8,y-8,x+8,y+8,WHITE);gfx->drawLine(x+8,y-8,x-8,y+8,WHITE);
+ case 0:
+ gfx->drawCircle(x,y,13,WHITE);gfx->drawCircle(x,y,11,WHITE);
+ gfx->drawLine(x,y,x,y-8,WHITE);gfx->drawLine(x,y,x+7,y+4,WHITE);break;
+ case 1:
+ gfx->fillCircle(x-8,y-5,6,YELLOW);
+ gfx->fillCircle(x-4,y+5,8,WHITE);gfx->fillCircle(x+7,y+2,10,WHITE);
+ gfx->fillRoundRect(x-14,y+2,30,11,5,WHITE);break;
+ case 2:
+ gfx->fillTriangle(x-14,y+12,x+1,y-14,x+4,y+2,WHITE);
+ gfx->fillTriangle(x+1,y-14,x+14,y+12,x+4,y+2,WHITE);break;
+ case 3:
+ gfx->drawRoundRect(x-14,y-11,28,22,7,WHITE);
+ gfx->fillCircle(x-6,y-2,3,WHITE);gfx->fillCircle(x+6,y-2,3,WHITE);
+ gfx->drawFastHLine(x-5,y+6,10,WHITE);break;
+ case 4:
+ gfx->drawCircle(x,y,12,WHITE);gfx->drawCircle(x,y,6,WHITE);
+ gfx->fillCircle(x,y,3,WHITE);break;
+ default:
+ gfx->drawCircle(x,y,12,WHITE);
+ gfx->drawLine(x-9,y-9,x+9,y+9,WHITE);
+ gfx->drawLine(x+9,y-9,x-9,y+9,WHITE);
  }
 }
 void tile(int x,int y,const char *name,int kind,uint16_t color){
- gfx->fillRoundRect(x,y,94,78,13,PANEL);gfx->fillRoundRect(x+29,y+7,36,36,10,color);icon(x+47,y+25,kind);
- txt(x+(94-(int)strlen(name)*6)/2,y+54,name,WHITE,1);
+ gfx->fillRoundRect(x,y,96,77,12,PANEL);
+ gfx->drawRoundRect(x,y,96,77,12,0x2945);
+ gfx->fillRoundRect(x+28,y+7,40,40,11,color);
+ icon(x+48,y+27,kind);
+ txt(x+(96-(int)strlen(name)*6)/2,y+57,name,WHITE,1);
 }
 void updateHomeTime(){
  struct tm t;char b[12];String v="--:--";
  if(getLocalTime(&t,5)){strftime(b,sizeof(b),"%H:%M",&t);v=b;}
  if(v==lastHomeTime)return;
- gfx->fillRect(236,7,80,22,BG);txt(239,9,v,WHITE,2);lastHomeTime=v;
+ gfx->fillRect(238,7,79,24,BG);txt(240,10,v,WHITE,2);lastHomeTime=v;
 }
 void home(){
- gfx->fillScreen(BG);txt(12,9,"T-OS",CYAN);txt(75,13,"PREMIUM",MUTED,1);
+ gfx->fillScreen(BG);
+ gfx->fillRect(0,0,320,3,ORANGE);
+ txt(12,10,"T-OS",ORANGE,2);
+ txt(83,15,"CAR EDITION",MUTED,1);
  lastHomeTime="";updateHomeTime();
- tile(6,35,"CLOCK",0,0x247F);tile(113,35,"WEATHER",1,0x05B9);tile(220,35,"HUD",2,ORANGE);
- tile(6,123,"AI",3,PURPLE);tile(113,123,"CONNECT",4,0x04F0);tile(220,123,"SETTINGS",5,0x8410);
- txt(11,214,WiFi.status()==WL_CONNECTED?"WIFI CONNECTED":"WIFI OFFLINE",WiFi.status()==WL_CONNECTED?GREEN:RED,1);
- txt(264,214,"v0.3",MUTED,1);
+ tile(6,38,"CLOCK",0,0x24BF);
+ tile(112,38,"WEATHER",1,0x05B9);
+ tile(218,38,"SMART HUD",2,ORANGE);
+ tile(6,124,"ASSISTANT",3,PURPLE);
+ tile(112,124,"CONNECT",4,0x04F0);
+ tile(218,124,"SETTINGS",5,0x8410);
+ gfx->drawFastHLine(8,210,304,0x2945);
+ txt(12,219,WiFi.status()==WL_CONNECTED?"WIFI ONLINE":"WIFI OFFLINE",WiFi.status()==WL_CONNECTED?GREEN:ORANGE,1);
+ txt(263,219,"v0.4",MUTED,1);
 }
 void updateClockTime(){
  struct tm t;char b[40];String v="--:--:--";
@@ -89,9 +123,23 @@ void weatherPage(){
  else{center(92,"NO WEATHER DATA",YELLOW);center(137,"CHECK WIFI",MUTED);}
 }
 void hudPage(){
- header("SMART HUD");txt(9,48,"SPEED",MUTED);txt(12,82,String(hudSpeed),GREEN,5);txt(19,145,"km/h",MUTED);
- gfx->drawRoundRect(225,48,83,70,12,RED);txt(239,58,"LIMIT",RED,1);txt(240,78,hudLimit?String(hudLimit):"--",WHITE,3);
- txt(183,134,hudTurn,CYAN);txt(182,160,String(hudDistance)+" m");gfx->fillRoundRect(8,193,304,35,7,PANEL);txt(17,203,hudAlert,YELLOW);
+ header("DRIVE DASHBOARD");
+ txt(14,55,"CURRENT SPEED",MUTED,1);
+ gfx->fillRoundRect(9,72,175,111,14,PANEL);
+ gfx->drawRoundRect(9,72,175,111,14,0x2B06);
+ String sp=String(hudSpeed);
+ gfx->fillRect(18,85,155,69,PANEL);
+ txt(21,88,sp,GREEN,6);
+ txt(115,158,"KM/H",MUTED,1);
+ gfx->fillRoundRect(206,72,104,82,13,WHITE);
+ gfx->drawRoundRect(209,75,98,76,13,RED);
+ txt(230,82,"LIMIT",RED,1);
+ String lim=hudLimit?String(hudLimit):"--";
+ txt(231,101,lim,0x0000,4);
+ txt(204,162,hudTurn,CYAN,2);
+ txt(206,183,String(hudDistance)+" m",WHITE,2);
+ gfx->fillRoundRect(8,211,304,26,7,PANEL);
+ txt(16,218,hudAlert,YELLOW,1);
 }
 void assistantPage(){header("AI ASSISTANT");center(75,"AI BRIDGE",PURPLE,3);center(131,"NOT CONNECTED",MUTED,1);center(164,"PHONE / CLOUD REQUIRED",MUTED,1);}
 void connectionPage(){
@@ -101,7 +149,7 @@ void connectionPage(){
  txt(13,181,"HUD: USB SERIAL DEMO",YELLOW,1);
 }
 void settingsPage(){
- header("SETTINGS");txt(14,57,"T-OS PREMIUM v0.3",CYAN);txt(14,101,"BOARD: ESP32-2432S028R",WHITE,1);
+ header("SETTINGS");txt(14,57,"T-OS CAR EDITION v0.4",CYAN);txt(14,101,"BOARD: ESP32-2432S028R",WHITE,1);
  txt(14,130,"DISPLAY: 320 x 240",WHITE,1);txt(14,159,"TOUCH: XPT2046",WHITE,1);txt(14,191,"RESET: HARDWARE BUTTON",MUTED,1);
 }
 void render(){
