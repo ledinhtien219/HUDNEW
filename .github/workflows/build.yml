@@ -18,7 +18,7 @@ jobs:
           arduino-cli config init
           arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
           arduino-cli core update-index
-          arduino-cli core install esp32:esp32@2.0.17
+          arduino-cli core install esp32:esp32@3.3.3
           arduino-cli lib install "GFX Library for Arduino"
           arduino-cli lib install "XPT2046_Touchscreen"
       - name: Compile ESP32 4MB DIO
@@ -32,7 +32,7 @@ jobs:
           BOOT=$(find build -maxdepth 1 -name '*.bootloader.bin' -print -quit)
           PART=$(find build -maxdepth 1 -name '*.partitions.bin' -print -quit)
           APP=$(find build -maxdepth 1 -name '*.ino.bin' -print -quit)
-          BOOTAPP=$(find "$HOME/.arduino15/packages/esp32/hardware/esp32/2.0.17/tools/partitions" -name 'boot_app0.bin' -print -quit)
+          BOOTAPP=$(find "$HOME/.arduino15/packages/esp32/hardware/esp32/3.3.3/tools/partitions" -name 'boot_app0.bin' -print -quit)
           test -s "$BOOT" && test -s "$PART" && test -s "$APP" && test -s "$BOOTAPP"
           python3 -m esptool --chip esp32 merge_bin -o build/TOS_Premium_ESP32_4MB_merged.bin --flash_mode dio --flash_freq 40m --flash_size 4MB 0x1000 "$BOOT" 0x8000 "$PART" 0xe000 "$BOOTAPP" 0x10000 "$APP"
           test -s build/TOS_Premium_ESP32_4MB_merged.bin
